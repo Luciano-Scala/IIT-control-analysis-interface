@@ -1,0 +1,1 @@
+"""Capa de presentación (PySide6). No debe contener lógica numérica."""

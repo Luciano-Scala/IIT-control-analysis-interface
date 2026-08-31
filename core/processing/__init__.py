@@ -1,0 +1,1 @@
+"""Procesamiento numérico puro (NumPy/SciPy) sin dependencias de UI."""

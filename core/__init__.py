@@ -1,0 +1,1 @@
+"""Lógica pura de negocio (hardware + processing), sin dependencias de UI."""

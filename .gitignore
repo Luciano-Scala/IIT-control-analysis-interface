@@ -1,0 +1,26 @@
+# Entorno Virtual
+venv/
+env/
+ENV/
+
+# Caché de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Archivos de Logs y Calibración Local
+*.log
+iitcai.log
+iitcai.log.1
+iitcai.log.2
+iitcai.log.3
+
+
+# IDEs y Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Archivos de datos generados o exportados
+*.csv

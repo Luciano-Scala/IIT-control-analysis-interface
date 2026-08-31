@@ -1,0 +1,1 @@
+"""Acceso a hardware (puerto serie)."""
