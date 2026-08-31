@@ -19,7 +19,7 @@ A modular Python desktop application built with **PySide6** designed for real-ti
 The application follows a clean **MVC / MVVM pattern** to decouple UI, processing algorithms, and hardware interaction:
 
 ```text
-arisoft_app/
+IITCAI_app/
 ├── main.py                     # Entrypoint
 ├── config.py                   # App configuration & constants
 ├── core/                       # Core logic (UI-independent)
@@ -44,8 +44,8 @@ arisoft_app/
 Clone the repository:
 
 Bash
-git clone [https://github.com/your-username/arisoft-daq.git](https://github.com/your-username/arisoft-daq.git)
-cd arisoft-daq
+git clone [https://github.com/Luciano-Scala/IIT-control-analysis-interface.git](https://github.com/Luciano-Scala/IIT-control-analysis-interface.git)
+cd IIT-control-analysis-interface
 Install dependencies:
 
 Bash
