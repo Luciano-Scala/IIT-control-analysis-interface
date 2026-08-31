@@ -33,12 +33,12 @@ arisoft_app/
 └── utils/                      # PDF export & logging tools
 ```
 ## Requirements
-*Python 3.10+
-*PySide6
-*NumPy
-*SciPy
-*Matplotlib
-*PySerial
+* Python 3.10+
+* PySide6
+* NumPy
+* SciPy
+* Matplotlib
+* PySerial
 
 ## Quick Start
 Clone the repository:
