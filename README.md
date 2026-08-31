@@ -18,7 +18,7 @@ A modular Python desktop application built with **PySide6** designed for real-ti
 
 The application follows a clean **MVC / MVVM pattern** to decouple UI, processing algorithms, and hardware interaction:
 
-
+```text
 arisoft_app/
 ├── main.py                     # Entrypoint
 ├── config.py                   # App configuration & constants
@@ -31,21 +31,16 @@ arisoft_app/
 │   ├── dialogs/                # Modal dialogs for inputs
 │   └── widgets/                # Matplotlib canvas wrappers & custom controls
 └── utils/                      # PDF export & logging tools
+```
+## Requirements
+*Python 3.10+
+*PySide6
+*NumPy
+*SciPy
+*Matplotlib
+*PySerial
 
-Requirements
-Python 3.10+
-
-PySide6
-
-NumPy
-
-SciPy
-
-Matplotlib
-
-PySerial
-
-Quick Start
+## Quick Start
 Clone the repository:
 
 Bash
