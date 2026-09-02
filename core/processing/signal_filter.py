@@ -3,15 +3,6 @@ core/processing/signal_filter.py
 ==================================
 Filtrado de la señal cruda de LVDT: elimina outliers (saltos de
 velocidad irreales), realinea tramos discontinuos y normaliza el cero.
-
-Traducción 1:1 del método original ``Filtrado_señal`` pero:
-- Sin ``self`` ni atributos de instancia: recibe todo por parámetro.
-- Sin llamadas a la UI (``self.update_analysis_plot``): el resultado se
-  devuelve en un dataclass y quien llama decide qué graficar.
-- Sin ``self.cancel_flag``: se reemplaza por un callback opcional
-  ``cancel_check()`` que, si devuelve True, aborta el procesamiento.
-  Esto permite que el ``QThread`` de análisis lo cancele de forma
-  cooperativa sin acoplar este módulo a Qt.
 """
 
 from __future__ import annotations

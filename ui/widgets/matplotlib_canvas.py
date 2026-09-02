@@ -1,24 +1,5 @@
 """
 ui/widgets/matplotlib_canvas.py
-=================================
-Reemplazo de ``matplotlib.backends.backend_tkagg.FigureCanvasTkAgg`` por
-``matplotlib.backends.backend_qtagg.FigureCanvasQTAgg``, encapsulado en
-un ``QWidget`` reutilizable por todas las pestañas (adquisición,
-análisis, resultados, dureza).
-
-En el original cada pestaña creaba manualmente su propio
-``Figure``/``FigureCanvasTkAgg``/``pack()``. Acá se centraliza en dos
-clases:
-
-- ``MatplotlibCanvas``: el ``FigureCanvasQTAgg`` en sí (una Figure con
-  N subplots).
-- ``MatplotlibWidget``: un ``QWidget`` que arma el canvas + una barra de
-  herramientas de navegación opcional (zoom/pan/guardar), listo para
-  insertarse en cualquier layout de PySide6.
-
-Este módulo es la ÚNICA pieza de ``ui/`` importada por el resto de la
-capa de presentación para graficar: ninguna pestaña debe instanciar
-``FigureCanvasQTAgg`` directamente.
 """
 
 from __future__ import annotations

@@ -1,17 +1,5 @@
 """
 utils/logger.py
-=================
-Configuración de logging, traducida de ``DataLoggerApp._setup_logger``
-del monolito original (líneas ~207-230).
-
-Diferencias respecto al original:
-- No vive como método de la ventana principal: es una función de
-  módulo (``get_logger``) que cualquier capa (``core/``, ``ui/``,
-  ``main.py``) puede importar sin acoplarse a Tkinter/Qt.
-- Idempotente: puede llamarse varias veces (p.ej. desde distintos
-  módulos) sin duplicar handlers, gracias al chequeo de
-  ``logger.handlers`` y a que ``logging.getLogger(name)`` siempre
-  devuelve la misma instancia para un mismo nombre.
 """
 
 from __future__ import annotations

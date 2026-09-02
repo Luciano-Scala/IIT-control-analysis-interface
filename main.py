@@ -1,8 +1,5 @@
 """
 main.py
-========
-Entrypoint de IITCAI. Reemplaza al ``if __name__ == '__main__': root =
-tk.Tk(); app = DataLoggerApp(root); root.mainloop()`` del original.
 """
 
 from __future__ import annotations

@@ -4,20 +4,6 @@ core/processing/segmentation.py
 Segmentación de la señal ya filtrada en tramos de "carga" / "espera" /
 "descarga", detección del patrón válido de ciclo y extracción de
 (h_max, L, S) por indentación.
-
-Traducción de los métodos originales:
-    segmentar_por_estado      (líneas ~1176-1204)
-    segmentar_por_pendiente   (líneas ~1206-1257)
-    detectar_patrones         (líneas ~1259-1272)
-    obtencion_datos           (líneas ~1274-1381)
-
-Cambios respecto al original:
-- Todo son funciones puras: reciben arrays y devuelven dataclasses,
-  no hay ``self.Datos`` ni llamadas a ``self.update_analysis_table``.
-- ``segmentar_por_pendiente`` ya no depende de un ``self`` intermedio.
-- ``obtener_datos_ciclos`` (antes ``obtencion_datos``) recibe R, E_i, E
-  y sus errores como parámetros en vez de fijarlos dentro del propio
-  método de UI que arma ``self.Datos``.
 """
 
 from __future__ import annotations

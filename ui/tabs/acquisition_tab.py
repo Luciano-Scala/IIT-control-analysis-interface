@@ -1,32 +1,5 @@
 """
 ui/tabs/acquisition_tab.py
-============================
-Pestaña "Adquisición de Datos". Traducción del ``setup_ui`` original
-(líneas ~292-637) más la lógica de conexión serie, grabación a CSV,
-indentación automática y control de motor que en el monolito estaba
-repartida entre ``toggle_serial_connection``, ``start_recording``,
-``stop_recording``, ``process_serial_data``, ``update_ui``,
-``start_auto_indentation``, ``stop_auto_indentation``, ``aprox_material``,
-``subir_motor``, ``bajar_motor``, ``parar_motor`` y ``update_Jestado``.
-
-Diferencias clave respecto al original:
-- La lectura serie ya no pasa por ``self.data_queue`` +
-  ``root.after(200, self.update_ui)``: usa ``SerialWorker`` (QThread)
-  y sus señales (ver ``core/hardware/serial_worker.py``). Los puntos
-  llegan uno por uno vía ``data_point_received`` (Qt los encola
-  automáticamente al hilo principal); esta pestaña los junta en un
-  buffer y un ``QTimer`` los vuelca en lote cada
-  ``config.ACQUISITION_UI_REFRESH_MS`` — mismo criterio de "actualizar
-  en lote" que el original, pero sin acoplarse a ``queue.Queue``.
-- Sin SQLite: el número de indentación para el nombre de archivo es un
-  contador en memoria (``self._contador_indentacion``), no una
-  consulta a ``Logger.db``. Si más adelante se agrega persistencia,
-  va en una capa aparte (``core/`` con QtSql), sin tocar esta pestaña.
-- Sin ``messagebox`` de Tkinter: se usa ``QMessageBox``.
-- Fuera de alcance por ahora (se agregan en una entrega posterior):
-  exportación a PDF (``utils/pdf_exporter.py``), vista de cámara,
-  panel de temperatura/GPS/burbuja y las alertas sonoras (``winsound``
-  es específico de Windows y no es parte de la lógica de adquisición).
 """
 
 from __future__ import annotations
@@ -36,7 +9,7 @@ import os
 from datetime import datetime
 from typing import List, Optional
 
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -86,6 +59,13 @@ class LedIndicator(QLabel):
 class AcquisitionTab(QWidget):
     """Pestaña de adquisición: conexión serie, grabación a CSV, gráfico
     en vivo Carga vs LVDT, e indentación automática."""
+
+    #: Emitida cada vez que cambian los campos de cliente. El original
+    #: guardaba esto en ``self.client_data`` y ``ui/tabs/report_tab.py``
+    #: leía ese dict UNA sola vez al construir la UI (nunca se
+    #: refrescaba después) — acá se conecta en vivo, ver
+    #: ``ui/main_window.py``.
+    client_data_changed = Signal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -368,6 +348,10 @@ class AcquisitionTab(QWidget):
         self.browse_btn.clicked.connect(self._select_file_location)
         self.refresh_name_btn.clicked.connect(self._actualizar_nombre_archivo)
 
+        self.cliente_edit.textChanged.connect(self._emit_client_data_changed)
+        self.solicitud_edit.textChanged.connect(self._emit_client_data_changed)
+        self.muestra_edit.textChanged.connect(self._emit_client_data_changed)
+
         self.start_btn.clicked.connect(self._start_recording)
         self.stop_btn.clicked.connect(self._stop_recording)
         self.clear_btn.clicked.connect(self._clear_plot)
@@ -511,6 +495,16 @@ class AcquisitionTab(QWidget):
             carpeta = os.path.dirname(self._file_path)
             self._file_path = os.path.join(carpeta, nuevo_nombre)
         self._file_name = nuevo_nombre
+
+    def _emit_client_data_changed(self) -> None:
+        self.client_data_changed.emit(
+            {
+                "fecha": self.fecha_edit.text(),
+                "cliente": self.cliente_edit.text(),
+                "solicitud": self.solicitud_edit.text(),
+                "muestra": self.muestra_edit.text(),
+            }
+        )
 
     # ------------------------------------------------------------------
     # Grabación

@@ -1,23 +1,6 @@
 """
 core/hardware/serial_worker.py
-===============================
-Reemplazo del par ``threading.Thread`` + ``queue.Queue`` del código original
-(:func:`process_serial_data` + ``self.data_queue`` + ``root.after(200, ...)``)
-por un ``QThread`` que emite ``Signal`` de Qt.
 
-Ventajas frente al original:
-- No hace falta un polling periódico (``root.after``) del lado de la UI:
-  Qt encola automáticamente las señales cuando el receptor vive en otro
-  hilo (conexión ``QueuedConnection`` implícita), por lo que cada slot
-  conectado a ``data_point_received`` se ejecuta en el hilo principal
-  de forma segura y ordenada.
-- El acceso concurrente al objeto ``serial.Serial`` (lecturas continuas
-  desde este hilo + escrituras de comandos desde la UI) se protege con
-  un ``QMutex`` en vez de confiar en el GIL implícitamente.
-
-Este módulo NO importa nada de ``ui/`` ni de Tkinter/PySide widgets:
-solo expone señales con datos (dataclasses / tipos simples) y depende
-únicamente de ``pyserial`` y Qt Core.
 """
 
 from __future__ import annotations

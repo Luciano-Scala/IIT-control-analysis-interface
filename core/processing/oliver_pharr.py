@@ -4,26 +4,6 @@ core/processing/oliver_pharr.py
 Modelo de indentación esférica (Oliver-Pharr / Haggag) y ajuste de la
 curva de endurecimiento por deformación (Ludwig/Hollomon), con
 propagación de errores.
-
-Traducción de los métodos originales:
-    calculo_compliance       (líneas ~1383-1389)
-    Calculos                 (líneas ~1878-1941)   -> calcular_resultados_indentacion
-    New_Raps_hibrido         (líneas ~1943-1973)   -> newton_raphson_hibrido
-    estimar_error_total_NR   (líneas ~1975-2018)   -> estimar_error_total_nr
-    calculo_parametros       (líneas ~2020-2158)
-    Calc_sigma_y             (líneas ~2160-2216)   -> calc_sigma_y
-    Calcular_n               (líneas ~2218-2247)   -> calcular_n
-
-Cambios respecto al original:
-- Sin ``self``: todo son funciones puras que reciben/devuelven arrays
-  o dataclasses.
-- ``Calc_sigma_y`` ya no llama a ``self.acero_var.get()``: recibe
-  ``beta_m`` (o ``material`` + tabla) como parámetro explícito. Ver
-  ``config.MATERIAL_BETA_M``.
-- ``Calculos`` ya no dispara ``messagebox.askyesno`` ni actualiza
-  gráficos/tablas de la UI: solo calcula y devuelve un
-  ``ResultadoIndentacion``. La confirmación "¿agregar al preinforme?"
-  y el refresco de widgets quedan a cargo de la capa ``ui/``.
 """
 
 from __future__ import annotations
@@ -346,6 +326,9 @@ class ResultadoIndentacion:
     tension: np.ndarray       # Pa
     x_fit: np.ndarray         # deformación para la curva de ajuste continua
     y_fit: np.ndarray         # tensión (Pa) de la curva de ajuste continua
+    h_max: np.ndarray         # por ciclo, corregido por compliance (m)
+    L: np.ndarray             # por ciclo (N)
+    S: np.ndarray             # por ciclo (N/m)
 
 
 def calcular_resultados_indentacion(parametros: dict, material: str) -> ResultadoIndentacion:
@@ -413,4 +396,7 @@ def calcular_resultados_indentacion(parametros: dict, material: str) -> Resultad
         tension=tension,
         x_fit=x_fit,
         y_fit=y_fit,
+        h_max=h_corr,
+        L=L,
+        S=parametros["S"],
     )

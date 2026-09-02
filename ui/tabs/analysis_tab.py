@@ -1,45 +1,5 @@
 """
 ui/tabs/analysis_tab.py
-=========================
-Pestaña "Análisis CSV". Traducción de ``setup_ui_analysis`` (líneas
-~735-849) más los métodos backend asociados: ``load_csv_file``,
-``process_csv_data``, ``borrar_csv``, ``update_analysis_plot``,
-``update_analysis_table``, ``toggle_checkbox`` y ``recalcular``.
-
-Flujo (idéntico al original en espíritu, distinto en mecánica):
-
-    1. El usuario elige un CSV grabado por AcquisitionTab.
-    2. Se parsea el encabezado de cliente + filas de datos (se
-       descartan filas con EstadoIndentacion == "NI").
-    3. ``core.processing.signal_filter.filtrar_senal`` limpia outliers
-       y realinea tramos.
-    4. ``core.processing.segmentation.procesar_senal_filtrada``
-       segmenta por estado/pendiente y extrae (h_max, L, S) por ciclo.
-    5. La curva intermedia (LVDT filtrado vs Carga) y la tabla de
-       ciclos se muestran; cada fila tiene un checkbox ("Incluir") que
-       decide si ese ciclo entra en el cálculo final.
-    6. Al presionar "Calcular parámetros de indentación" se arma el
-       diccionario de parámetros filtrado por los checkboxes y se llama
-       a ``core.processing.oliver_pharr.calcular_resultados_indentacion``.
-
-Diferencias respecto al original:
-- Los pasos 2-4 corren en un ``QThread`` dedicado (``_AnalysisWorker``)
-  en vez de un ``threading.Thread`` crudo con ``self.data_queue``
-  implícito vía atributos de instancia; el progreso llega por señales
-  Qt (``progress``, ``plot_ready``, ``datos_ready``, ``error``).
-- ``self.cancel_flag`` se reemplaza por ``worker.cancel()``, que fija
-  un flag leído por el ``cancel_check`` que recibe ``filtrar_senal``.
-- Sin ``messagebox.askyesno`` de "¿agregar al preinforme?": el
-  resultado del cálculo se emite por la señal ``resultado_calculado``
-  para que ``ui/tabs/results_tab.py`` (próxima entrega) decida qué
-  hacer con él. Mientras tanto, se muestra un resumen en un
-  ``QMessageBox`` para que el cálculo ya sea útil hoy.
-- "Calcular Dureza" queda como stub: el original leía
-  ``self.Datos["L_max"]``, una clave que ``obtencion_datos`` nunca
-  llega a definir (solo define ``"L"``, el array de cargas máximas por
-  ciclo) — es decir, esa función ya estaba rota en el monolito. Se
-  documenta acá en vez de reproducir el bug; se implementa como
-  corresponde en ``ui/tabs/hardness_tab.py``.
 """
 
 from __future__ import annotations
@@ -69,9 +29,11 @@ from PySide6.QtWidgets import (
 )
 
 import config
+from core.processing.brinell import calcular_dureza_brinell
 from core.processing.oliver_pharr import ResultadoIndentacion, calcular_resultados_indentacion
 from core.processing.segmentation import DatosIndentacion, procesar_senal_filtrada
 from core.processing.signal_filter import filtrar_senal
+from ui.dialogs.hardness_dialog import HardnessDialog
 from ui.widgets.matplotlib_canvas import MatplotlibWidget
 from utils.logger import get_logger
 
@@ -85,7 +47,9 @@ class _AnalysisWorker(QThread):
 
     progress = Signal(str, float)          # (mensaje, porcentaje 0-100)
     client_info_ready = Signal(dict)       # {"fecha":..., "cliente":..., "solicitud":..., "muestra":...}
-    plot_ready = Signal(object, object)    # (lvdt_um: np.ndarray, carga: np.ndarray)
+    plot_ready = Signal(object, object)    # (lvdt_um: np.ndarray, carga: np.ndarray) — escala de esta pestaña
+    informe_data_ready = Signal(object, object)  # (lvdt_mm, carga) — escala sin convertir, para ReportTab
+    carga_max_ready = Signal(float)        # máxima carga cruda del archivo, para HardnessTab (vía AnalysisTab)
     datos_ready = Signal(object)           # DatosIndentacion
     error = Signal(str)
     cancelled = Signal()
@@ -103,6 +67,9 @@ class _AnalysisWorker(QThread):
             self.progress.emit("Cargando...", 0.0)
             column_dict, client_info = self._parse_csv()
             self.client_info_ready.emit(client_info)
+
+            if column_dict["CargaF(N)"]:
+                self.carga_max_ready.emit(max(column_dict["CargaF(N)"]))
 
             if self._cancel:
                 self.cancelled.emit()
@@ -122,6 +89,7 @@ class _AnalysisWorker(QThread):
                 return
 
             self.plot_ready.emit(filtered.lvdt_ajustado * 1000, filtered.carga)
+            self.informe_data_ready.emit(filtered.lvdt_ajustado, filtered.carga)
 
             self.progress.emit("Segmentando y detectando patrones...", 70.0)
             datos = procesar_senal_filtrada(filtered)
@@ -183,9 +151,23 @@ class AnalysisTab(QWidget):
     """Pestaña de análisis: carga de CSV, filtrado/segmentación y
     disparo del cálculo de parámetros de indentación."""
 
-    #: Emitida al terminar un cálculo exitoso; ``results_tab`` (próxima
-    #: entrega) se conectará acá para graficar/tabular el resultado.
-    resultado_calculado = Signal(object)  # ResultadoIndentacion
+    #: Emitida al terminar un cálculo exitoso: (resultado, ruta_csv_origen).
+    #: ``results_tab`` se conecta acá para graficar/tabular el resultado y
+    #: sugerir el nombre del archivo al exportar.
+    resultado_calculado = Signal(object, str)  # ResultadoIndentacion, csv_path
+
+    #: Emitida si el usuario confirma agregar la curva filtrada al
+    #: preinforme (ver docstring del módulo). ``report_tab`` se conecta
+    #: acá para superponerla en su gráfico.
+    curva_informe_lista = Signal(object, object)  # (lvdt_mm, carga)
+
+    #: Emitida si el usuario confirma agregar el resultado calculado
+    #: (sigma_y/n/UTS) a la tabla resumen del preinforme.
+    resultado_informe_listo = Signal(object)  # ResultadoIndentacion
+
+    #: Emitida si el usuario confirma agregar una impronta de dureza
+    #: calculada al pre-informe de dureza: (d1, d2, d3, carga_N, resultados_HB).
+    resultado_dureza_listo = Signal(float, float, float, float, object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -193,6 +175,7 @@ class AnalysisTab(QWidget):
         self._csv_path = ""
         self._worker: Optional[_AnalysisWorker] = None
         self._datos: Optional[DatosIndentacion] = None
+        self._carga_max_global: Optional[float] = None
 
         self._build_ui()
         self._wire_signals()
@@ -328,6 +311,8 @@ class AnalysisTab(QWidget):
         self._worker.progress.connect(self._on_progress)
         self._worker.client_info_ready.connect(self._on_client_info)
         self._worker.plot_ready.connect(self._on_plot_ready)
+        self._worker.informe_data_ready.connect(self._on_informe_data_ready)
+        self._worker.carga_max_ready.connect(self._on_carga_max_ready)
         self._worker.datos_ready.connect(self._on_datos_ready)
         self._worker.error.connect(self._on_error)
         self._worker.cancelled.connect(self._on_cancelled)
@@ -349,8 +334,11 @@ class AnalysisTab(QWidget):
         self.progress_label.setText(f"{percent:.1f}%")
 
     def _on_client_info(self, client_info: dict) -> None:
-        # ``results_tab``/``report_tab`` (próxima entrega) mostrarán estos
-        # datos en sus propios encabezados; por ahora solo quedan en el log.
+        # ``results_tab`` no necesita esto; ``report_tab`` sí lo usa, pero
+        # a través de AcquisitionTab.client_data_changed (ver docstring:
+        # el original mostraba ahí self.client_data, alimentado desde la
+        # pestaña de Adquisición, no desde el encabezado del CSV). Queda
+        # en el log para trazabilidad.
         log.info(f"Datos de cliente leídos del CSV: {client_info}")
 
     def _on_plot_ready(self, lvdt_um, carga) -> None:
@@ -362,6 +350,21 @@ class AnalysisTab(QWidget):
         ax.set_title("Curva Carga vs. Desplazamiento")
         ax.grid(True)
         self.plot_widget.redraw()
+
+    def _on_carga_max_ready(self, carga_max: float) -> None:
+        self._carga_max_global = carga_max
+
+    def _on_informe_data_ready(self, lvdt_mm, carga) -> None:
+        """Réplica de la confirmación ``"¿Desea agregar esta indentación
+        al preinforme?"`` que en el original ocurre justo después de
+        filtrar la señal (dentro de ``process_csv_data``)."""
+        respuesta = QMessageBox.question(
+            self,
+            "Confirmación",
+            "¿Desea agregar esta indentación al preinforme?",
+        )
+        if respuesta == QMessageBox.Yes:
+            self.curva_informe_lista.emit(lvdt_mm, carga)
 
     def _on_datos_ready(self, datos: DatosIndentacion) -> None:
         self._datos = datos
@@ -433,6 +436,7 @@ class AnalysisTab(QWidget):
         self.rb_dureza_calc.setAutoExclusive(True)
         self.rb_indentacion_calc.setAutoExclusive(True)
         self._datos = None
+        self._carga_max_global = None
         self._actualizar_calcular_ind()
         self.status_label.setText("Archivo eliminado")
         self.status_label.setStyleSheet("color: orange;")
@@ -491,29 +495,60 @@ class AnalysisTab(QWidget):
             QMessageBox.critical(self, "Error", f"No se pudo completar el cálculo:\n{exc}")
             return
 
-        self.resultado_calculado.emit(resultado)
+        self.resultado_calculado.emit(resultado, self._csv_path)
 
-        QMessageBox.information(
+        respuesta = QMessageBox.question(
             self,
-            "Cálculo terminado",
-            (
-                f"σy = {resultado.sigma_y / 1e6:.1f} ± {resultado.err_sigma_y / 1e6:.1f} MPa\n"
-                f"n = {resultado.n:.3f} ± {resultado.err_n:.3f}\n"
-                f"UTS = {resultado.UTS1 / 1e6:.1f} ± {resultado.err_UTS1 / 1e6:.1f} MPa\n\n"
-                "El detalle completo (curva y tabla) se mostrará en la pestaña "
-                "'Resultados Finales' en la próxima entrega."
-            ),
+            "Confirmación",
+            "¿Desea agregar esta indentación al preinforme?",
         )
+        if respuesta == QMessageBox.Yes:
+            self.resultado_informe_listo.emit(resultado)
 
     def _calcular_dureza(self) -> None:
-        """Placeholder: ver docstring del módulo (bug de ``self.Datos['L_max']``
-        en el original). Se implementa correctamente en ``hardness_tab.py``."""
-        QMessageBox.information(
+        """Réplica de ``calcular_dureza``: pide los 3 diámetros de
+        impronta y calcula la dureza Brinell.
+
+        Corrige el bug del original, que leía ``self.Datos["L_max"]``
+        — una clave que ``obtencion_datos`` nunca definía (ver docstring
+        del módulo) — por lo que esta función siempre fallaba con
+        "No se obtuvo un valor de carga máxima." Acá se usa la carga
+        máxima cruda del archivo (``carga_max_ready`` del worker, sin
+        pasar por la segmentación de ciclos elástico-plástica, que no
+        aplica a un ensayo de dureza de carga única)."""
+        if self._csv_path == "":
+            QMessageBox.critical(self, "Error", "No se cargó un archivo de datos.")
+            return
+        if self._carga_max_global is None:
+            QMessageBox.critical(self, "Error", "No se obtuvo un valor de carga máxima.")
+            return
+
+        dialog = HardnessDialog(self)
+        if dialog.exec() != HardnessDialog.Accepted:
+            return
+
+        diametros = dialog.get_diametros()
+        if diametros is None:
+            return
+        d1, d2, d3 = diametros
+
+        carga_N = self._carga_max_global
+        resultados = calcular_dureza_brinell([d1, d2, d3], carga_N, config.DEFAULT_R)
+
+        respuesta = QMessageBox.question(
             self,
-            "Próximamente",
-            "El cálculo de Dureza (Brinell) se implementa en la pestaña "
-            "'Pre - Informe (Dureza)' en una próxima entrega.",
+            "Resultado",
+            (
+                f"Los valores de dureza calculados son: \n"
+                f"DB1 = {resultados[0]:.2f} \n"
+                f"DB2 = {resultados[1]:.2f} \n"
+                f"DB3 = {resultados[2]:.2f} \n"
+                "¿Desea agregar estos resultados al pre-informe de dureza?"
+            ),
         )
+        if respuesta == QMessageBox.Yes:
+            self.resultado_dureza_listo.emit(d1, d2, d3, carga_N, resultados)
+            QMessageBox.information(self, "Éxito", "Resultados agregados al pre-informe de dureza")
 
     # ------------------------------------------------------------------
     # Ciclo de vida
